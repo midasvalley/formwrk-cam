@@ -363,15 +363,21 @@ def probe(host):
     if not shutil.which("ffprobe"):
         print("stream    MPEG-TS is flowing (install ffmpeg to see the codec and size)")
         return True
-    r = sh("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
-           "stream=codec_name,width,height,avg_frame_rate", "-of", "json",
+    r = sh("ffprobe", "-v", "error", "-show_entries",
+           "stream=codec_type,codec_name,width,height,avg_frame_rate", "-of", "json",
            "-analyzeduration", "4000000", "-probesize", "6000000",
            f"tcp://{host}:{PORT}?timeout=12000000")
     try:
-        st = json.loads(r.stdout)["streams"][0]
+        streams = json.loads(r.stdout)["streams"]
+        st = next(s for s in streams if s.get("codec_type") == "video")
         num, den = (st.get("avg_frame_rate") or "0/1").split("/")
         fps = int(num) / int(den) if int(den) else 0
-        print(f"stream    {st['codec_name']} {st['width']}x{st['height']} @ {fps:g}fps")
+        # The microphone rides along as a second stream purely so the video delay
+        # can be measured afterwards (docs/SYNC.md). Say whether it is there: a
+        # take recorded without it has to fall back to reading lips.
+        mic = any(s.get("codec_type") == "audio" for s in streams)
+        print(f"stream    {st['codec_name']} {st['width']}x{st['height']} @ {fps:g}fps"
+              + (" + mic (sync reference)" if mic else " -- no mic, sync must be read off the lips"))
     except Exception:
         print("stream    MPEG-TS is flowing, ffprobe could not read a full header yet")
     return True

@@ -21,12 +21,13 @@ What is in the stream:
 | | |
 |---|---|
 | container | MPEG-TS, 188-byte packets, one program |
-| PIDs | PAT on 0, PMT on 0x1000, video on 0x100 |
+| PIDs | PAT on 0, PMT on 0x1000, video on 0x100, the microphone on 0x101 |
 | codec | HEVC (stream type 0x24) or H.264 (0x1B), picked on the phone |
+| microphone | AAC-LC in ADTS (stream type 0x0F), 64 kb/s mono, on the video's clock. Present only when the phone granted microphone access -- otherwise the PMT names video alone, so a reader never waits on a stream that will not come. It is a sync reference, not sound to use: see SYNC.md |
 | key frames | every second, parameter sets (VPS/SPS/PPS) repeated on each one |
 | B-frames | none, so DTS equals PTS and every PES header carries PTS alone |
 | PAT/PMT | ahead of every key frame and at least every 30 frames |
-| clock | 90 kHz; PTS runs 50 ms ahead of PCR |
+| clock | 90 kHz; PTS runs 50 ms ahead of PCR. PCR rides the video stream, and the microphone is stamped against the same base, so the two share one timeline |
 | access units | each begins with an access unit delimiter |
 
 A new client receives nothing until the next key frame, and the phone forces

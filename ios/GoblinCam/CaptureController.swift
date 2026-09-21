@@ -65,15 +65,24 @@ final class CaptureController: NSObject, ObservableObject {
     // MARK: - Private
 
     private let encoder = VideoEncoder()
+    private let audioEncoder = AudioEncoder()
     private let server = StreamServer()
     private let control = ControlServer()
     private var muxer = TSMuxer(codec: .hevc)
     private let sessionQueue = DispatchQueue(label: "goblincam.session")
     private let outputQueue = DispatchQueue(label: "goblincam.output")
+    /// Video and audio are encoded on different queues but share one muxer and one
+    /// socket, and a transport stream is a single ordered sequence with a
+    /// continuity counter per PID. Everything that touches the muxer goes through
+    /// here, in the order it arrives.
+    private let muxQueue = DispatchQueue(label: "goblincam.mux")
     private let output = AVCaptureVideoDataOutput()
+    private let audioOutput = AVCaptureAudioDataOutput()
+    private let audioQueue = DispatchQueue(label: "goblincam.audio")
 
     private var device: AVCaptureDevice?
     private var input: AVCaptureDeviceInput?
+    private var audioInput: AVCaptureDeviceInput?
     private var encoderRunning = false
     private var forceKeyframe = false
     private var ptsBase: CMTime?
@@ -91,6 +100,9 @@ final class CaptureController: NSObject, ObservableObject {
         encoder.onAccessUnit = { [weak self] annexB, pts, keyframe in
             self?.handleAccessUnit(annexB, pts: pts, keyframe: keyframe)
         }
+        audioEncoder.onFrame = { [weak self] adts, pts in
+            self?.handleAudioFrame(adts, pts: pts)
+        }
         server.onNeedsKeyframe = { [weak self] in self?.forceKeyframe = true }
         server.onClientCountChanged = { [weak self] count in
             guard let self else { return }
@@ -106,7 +118,12 @@ final class CaptureController: NSObject, ObservableObject {
                 DispatchQueue.main.async { self.status = "camera access denied" }
                 return
             }
-            self.sessionQueue.async { self.configureSession() }
+            // The microphone is the sync reference, not content: ask for it, carry
+            // on either way, and configure the session once the answer is in so the
+            // input can go in with everything else.
+            AVCaptureDevice.requestAccess(for: .audio) { _ in
+                self.sessionQueue.async { self.configureSession() }
+            }
         }
         server.start(port: port)
         control.onCommand = { [weak self] line in self?.handle(command: line) ?? "error" }
@@ -268,10 +285,25 @@ final class CaptureController: NSObject, ObservableObject {
         output.alwaysDiscardsLateVideoFrames = true
         output.setSampleBufferDelegate(self, queue: outputQueue)
         if session.canAddOutput(output) { session.addOutput(output) }
+        addMicrophone()
         session.commitConfiguration()
 
         applyLens(found[min(lensIndex, found.count - 1)])
         session.startRunning()
+    }
+
+    /// The phone's microphone, for the sync reference only -- see AudioEncoder.
+    /// A refusal is not a failure: the stream carries video alone and the PMT
+    /// never mentions audio, which is exactly how it behaved before this existed.
+    private func addMicrophone() {
+        guard audioInput == nil, AVCaptureDevice.authorizationStatus(for: .audio) == .authorized,
+              let microphone = AVCaptureDevice.default(for: .audio),
+              let mic = try? AVCaptureDeviceInput(device: microphone),
+              session.canAddInput(mic) else { return }
+        session.addInput(mic)
+        audioInput = mic
+        audioOutput.setSampleBufferDelegate(self, queue: audioQueue)
+        if session.canAddOutput(audioOutput) { session.addOutput(audioOutput) }
     }
 
     private func reconfigureSession() {
@@ -476,8 +508,12 @@ final class CaptureController: NSObject, ObservableObject {
 
         do {
             try encoder.start(config)
-            muxer = TSMuxer(codec: codec)
-            ptsBase = nil
+            let hasAudio = audioInput != nil
+            muxQueue.sync {
+                muxer = TSMuxer(codec: codec, hasAudio: hasAudio)
+                ptsBase = nil
+            }
+            audioEncoder.stop()
             forceKeyframe = true
             encoderRunning = true
         } catch {
@@ -488,6 +524,7 @@ final class CaptureController: NSObject, ObservableObject {
     private func stopEncoder() {
         guard encoderRunning else { return }
         encoder.stop()
+        audioEncoder.stop()
         encoderRunning = false
     }
 
@@ -506,19 +543,47 @@ final class CaptureController: NSObject, ObservableObject {
     }
 
     private func handleAccessUnit(_ annexB: [UInt8], pts: CMTime, keyframe: Bool) {
-        let base = ptsBase ?? pts
-        if ptsBase == nil { ptsBase = pts }
-        let elapsed = CMTimeSubtract(pts, base)
-        let ticks = Int64((CMTimeGetSeconds(elapsed) * 90_000).rounded())
-        server.broadcast(muxer.mux(accessUnit: annexB, pts90k: ticks, keyframe: keyframe), keyframe: keyframe)
+        muxQueue.async {
+            // The first picture sets zero on the stream's clock; the microphone is
+            // measured against the same base, so the two land on one timeline.
+            if self.ptsBase == nil { self.ptsBase = pts }
+            let ticks = self.ticks(for: pts)
+            self.server.broadcast(self.muxer.mux(accessUnit: annexB, pts90k: ticks, keyframe: keyframe),
+                                  keyframe: keyframe)
+        }
+    }
+
+    private func handleAudioFrame(_ adts: [UInt8], pts: CMTime) {
+        muxQueue.async {
+            // Audio from before the first picture has no base to sit on. There is
+            // no point holding it: the video is what a reader is waiting for.
+            guard self.ptsBase != nil else { return }
+            let data = self.muxer.mux(adtsFrame: adts, pts90k: self.ticks(for: pts))
+            guard !data.isEmpty else { return }
+            self.server.broadcast(data, keyframe: false)
+        }
+    }
+
+    /// 90 kHz ticks since the first picture. Call on `muxQueue`.
+    private func ticks(for pts: CMTime) -> Int64 {
+        guard let base = ptsBase else { return 0 }
+        return Int64((CMTimeGetSeconds(CMTimeSubtract(pts, base)) * 90_000).rounded())
     }
 }
 
 // MARK: - Frame delivery
 
-extension CaptureController: AVCaptureVideoDataOutputSampleBufferDelegate {
+extension CaptureController: AVCaptureVideoDataOutputSampleBufferDelegate,
+                             AVCaptureAudioDataOutputSampleBufferDelegate {
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
                        from connection: AVCaptureConnection) {
+        // One delegate method serves both outputs; they arrive on their own queues.
+        if output === audioOutput {
+            guard encoderRunning else { return }
+            audioEncoder.encode(sampleBuffer)
+            return
+        }
+
         let now = CACurrentMediaTime()
         frameTimestamps.append(now)
         frameTimestamps.removeAll { now - $0 > 1 }
