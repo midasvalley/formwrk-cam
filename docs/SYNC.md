@@ -8,7 +8,8 @@ purpose: measuring that lag. It travels with the video -- same capture, same
 encode, same socket, same buffering -- so it arrives exactly as late as the
 picture does. Put it on its own recording track in OBS and you can read the
 delay straight off the tape: cross-correlate it against the real mic's track
-and the offset between them *is* the video lag, to the sample. No clapping, no
+and the offset between them *is* the video lag, to within a frame or two of
+audio (the AAC encoder's own small fixed delay, on the safe side). No clapping, no
 reading lips, and it tracks drift through a long take instead of giving one
 number for the whole thing.
 
@@ -49,7 +50,7 @@ both are real audio of the same room, the correlation is strong and you can do
 it in windows across the take to follow drift, instead of assuming one number
 holds.
 
-**Without the phone's track** -- permission refused, or a take recorded before
+**2. Without the phone's track** -- permission refused, or a take recorded before
 this existed -- fall back to a mark. Clap once, both hands in frame, at the
 start of every take and again after twenty minutes on a long one, then find
 the frame where the hands meet against the transient in the waveform. Add

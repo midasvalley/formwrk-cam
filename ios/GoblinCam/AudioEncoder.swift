@@ -170,13 +170,14 @@ final class AudioEncoder {
                                24000, 22050, 16000, 12000, 11025, 8000, 7350]
         let index = rates.firstIndex(of: sampleRate) ?? 3    // 48 kHz, what the phone gives
         let frame = payloadBytes + 7
-        return [
-            0xFF, 0xF1,                                      // sync word, MPEG-4, no CRC
-            UInt8((1 << 6) | (index << 2) | ((channels >> 2) & 0x01)),   // profile 1 = AAC-LC
-            UInt8(((channels & 0x03) << 6) | UInt8((frame >> 11) & 0x03)),
-            UInt8((frame >> 3) & 0xFF),
-            UInt8(((frame & 0x07) << 5) | 0x1F),
-            0xFC,
-        ]
+        let profile = 1                                       // AAC-LC
+        // One field per line: folded into a single array literal, the mix of
+        // shifts, masks and UInt8 conversions is more than the type checker
+        // will resolve, and the build fails.
+        let byte2 = UInt8((profile << 6) | (index << 2) | ((channels >> 2) & 0x01))
+        let byte3 = UInt8(((channels & 0x03) << 6) | ((frame >> 11) & 0x03))
+        let byte4 = UInt8((frame >> 3) & 0xFF)
+        let byte5 = UInt8(((frame & 0x07) << 5) | 0x1F)       // + buffer fullness, high bits
+        return [0xFF, 0xF1, byte2, byte3, byte4, byte5, 0xFC]  // sync word, MPEG-4, no CRC ... fullness, 1 block
     }
 }

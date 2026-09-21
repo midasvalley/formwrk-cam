@@ -110,8 +110,8 @@ next connection. Fix each clip in post.
 The feed carries the phone's microphone beside the picture, arriving exactly as
 late as the picture does. Put `GoblinCam` on its own OBS recording track (the
 real mic on 1 and 2, the phone on 3, the recording writing 1 and 3) and the lag
-is whatever offset lines the two audio tracks up -- exact, and measurable in
-windows so drift through a long take is visible. Never mix that track into the
+is whatever offset lines the two audio tracks up -- to within a frame or two,
+and measurable in windows so drift through a long take is visible. Never mix that track into the
 recording; it is 64 kb/s mono of the room.
 
 Check `status` says `+ mic (sync reference)` before a take that matters. If it
