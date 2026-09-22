@@ -41,6 +41,8 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>GoblinCam uses the camera to send a 4K vertical video feed to your Mac.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>GoblinCam sends the phone microphone alongside the picture, so the video delay can be measured against your real microphone afterwards.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>GoblinCam serves the video feed to your Mac over the local network. Not needed when connected by USB.</string>
 	<key>NSBonjourServices</key>

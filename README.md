@@ -153,13 +153,18 @@ script.
 
 ## Audio
 
-The feed is video only. Record audio on a mic in OBS.
+Record your sound on a real mic in OBS. The feed carries the phone's own
+microphone too, but only as a measuring stick -- 64 kb/s mono, never to be
+mixed in.
 
 The video arrives 0.5 to 0.9 s behind the mic, the delay differs from one
-connection to the next, and it grows over a long session. A fixed sync offset in
-OBS will not hold. Clap once in frame at the start of every take and shift the
-audio in post. [docs/SYNC.md](docs/SYNC.md) has the procedure, including the one
-ffmpeg flag that makes the fix survive a server-side re-encode.
+connection to the next, and it grows over a long session, so a fixed sync
+offset in OBS will not hold. The phone's track is late by exactly as much as
+the picture is, because it travels with it. Record it on its own track in OBS
+and the delay is whatever offset lines the two audio tracks up -- measurable
+across the take, drift and all, instead of guessed from one clap.
+[docs/SYNC.md](docs/SYNC.md) has the procedure, the fallback for a take without
+it, and the one ffmpeg flag that makes the fix survive a server-side re-encode.
 
 ## The app
 

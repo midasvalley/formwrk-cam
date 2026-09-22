@@ -1,6 +1,7 @@
 import Foundation
 
-/// Minimal single-program MPEG-TS muxer for one video elementary stream.
+/// Minimal single-program MPEG-TS muxer: one video elementary stream, and
+/// optionally the phone's own microphone beside it.
 ///
 /// Why MPEG-TS and not a raw Annex-B stream: TS carries real PTS/PCR. A raw
 /// elementary stream makes ffmpeg synthesise timestamps at a nominal frame rate,
@@ -19,11 +20,20 @@ final class TSMuxer {
 
     private let pmtPID: UInt16 = 0x1000
     private let videoPID: UInt16 = 0x0100
+    private let audioPID: UInt16 = 0x0101
+    /// ISO/IEC 13818-1 stream_type for AAC carried in ADTS.
+    private let audioStreamType: UInt8 = 0x0F
 
     private let codec: Codec
+    /// Fixed for the life of the muxer. A PMT that promises an elementary stream
+    /// which never delivers leaves a demuxer waiting on it, so audio is advertised
+    /// only when there is a microphone to feed it -- and a muxer is built fresh on
+    /// every reconnect anyway, so this never has to change mid-stream.
+    private let hasAudio: Bool
     private var patCC: UInt8 = 0
     private var pmtCC: UInt8 = 0
     private var videoCC: UInt8 = 0
+    private var audioCC: UInt8 = 0
     private var framesSincePSI = Int.max
 
     /// PTS runs this far ahead of PCR so a decoder always holds a little buffer.
@@ -33,7 +43,10 @@ final class TSMuxer {
     /// Repeat PAT/PMT at least this often, so a client joining mid-stream can lock on.
     private let psiEveryFrames = 30
 
-    init(codec: Codec) { self.codec = codec }
+    init(codec: Codec, hasAudio: Bool = false) {
+        self.codec = codec
+        self.hasAudio = hasAudio
+    }
 
     // MARK: - Public
 
@@ -49,15 +62,28 @@ final class TSMuxer {
         }
         framesSincePSI += 1
 
-        var pes = pesHeader(pts: pts90k + ptsLeadTicks)
+        var pes = pesHeader(streamID: 0xE0, pts: pts90k + ptsLeadTicks, payloadCount: nil)
         pes += accessUnit
-        out += packetize(pes: pes, pcr: pts90k, randomAccess: keyframe)
+        out += packetize(pes: pes, pid: videoPID, cc: &videoCC, pcr: pts90k, randomAccess: keyframe)
         return Data(out)
+    }
+
+    /// TS bytes for one ADTS AAC frame, on the same 90 kHz clock as the video.
+    ///
+    /// No PCR and no random-access flag: the video stream owns the clock, and a
+    /// second stream setting PCR would fight it. Empty when the muxer was built
+    /// without audio, so a caller never has to check.
+    func mux(adtsFrame: [UInt8], pts90k: Int64) -> Data {
+        guard hasAudio else { return Data() }
+        var pes = pesHeader(streamID: 0xC0, pts: pts90k + ptsLeadTicks, payloadCount: adtsFrame.count)
+        pes += adtsFrame
+        return Data(packetize(pes: pes, pid: audioPID, cc: &audioCC, pcr: nil, randomAccess: false))
     }
 
     // MARK: - Packetisation
 
-    private func packetize(pes: [UInt8], pcr: Int64, randomAccess: Bool) -> [UInt8] {
+    private func packetize(pes: [UInt8], pid: UInt16, cc: inout UInt8,
+                           pcr: Int64?, randomAccess: Bool) -> [UInt8] {
         var out = [UInt8]()
         var offset = 0
         var first = true
@@ -65,15 +91,16 @@ final class TSMuxer {
         while offset < pes.count {
             // Only the first packet of an access unit carries PCR and the
             // random-access flag, so only it needs an adaptation field up front.
-            let wantPCR = first
-            let afBodyMin = (wantPCR || (first && randomAccess)) ? (1 + (wantPCR ? 6 : 0)) : 0
+            let wantPCR = first ? pcr : nil
+            let wantRandomAccess = first && randomAccess
+            let afBodyMin = (wantPCR != nil || wantRandomAccess) ? (1 + (wantPCR != nil ? 6 : 0)) : 0
             let maxPayload = afBodyMin > 0 ? (183 - afBodyMin) : 184
             let take = min(pes.count - offset, maxPayload)
 
-            out += emit(pid: videoPID, cc: &videoCC, start: first,
+            out += emit(pid: pid, cc: &cc, start: first,
                         payload: pes[offset ..< offset + take],
-                        pcr: wantPCR ? pcr : nil,
-                        randomAccess: first && randomAccess)
+                        pcr: wantPCR,
+                        randomAccess: wantRandomAccess)
             offset += take
             first = false
         }
@@ -119,12 +146,17 @@ final class TSMuxer {
         return pkt
     }
 
-    private func pesHeader(pts: Int64) -> [UInt8] {
-        var pes: [UInt8] = [0x00, 0x00, 0x01, 0xE0]
-        pes += [0x00, 0x00]  // PES_packet_length 0 = unbounded, allowed for video
+    /// `payloadCount` nil leaves PES_packet_length at 0 -- unbounded, which the
+    /// standard allows for video only. Audio has to state its length.
+    private func pesHeader(streamID: UInt8, pts: Int64, payloadCount: Int?) -> [UInt8] {
+        let headerDataLength = 5   // one PTS, no DTS
+        var pes: [UInt8] = [0x00, 0x00, 0x01, streamID]
+        let length = payloadCount.map { 3 + headerDataLength + $0 } ?? 0
+        precondition(length <= 0xFFFF, "PES packet longer than its length field can hold")
+        pes += [UInt8((length >> 8) & 0xFF), UInt8(length & 0xFF)]
         pes.append(0x84)     // marker '10', data_alignment_indicator = 1
         pes.append(0x80)     // PTS present, DTS absent
-        pes.append(0x05)     // PES_header_data_length
+        pes.append(UInt8(headerDataLength))
         pes += Self.encodePTS(pts, guardBits: 0x02)
         return pes
     }
@@ -148,14 +180,22 @@ final class TSMuxer {
     }
 
     private func pmtSection() -> [UInt8] {
-        var s: [UInt8] = [0x02, 0xB0, 0x12]  // table_id, ssi + section_length 18
-        s += [0x00, 0x01]                    // program_number 1
+        // section_length counts every byte after it, the CRC included: 9 bytes of
+        // fixed fields, 5 per elementary stream, 4 of CRC.
+        let sectionLength = 9 + 5 * (hasAudio ? 2 : 1) + 4
+        var s: [UInt8] = [0x02, 0xB0, UInt8(sectionLength)]
+        s += [0x00, 0x01]                      // program_number 1
         s += [0xC1, 0x00, 0x00]
-        s += pidBytes(videoPID, prefix: 0xE0)  // PCR_PID
+        s += pidBytes(videoPID, prefix: 0xE0)  // PCR_PID -- the video stream keeps the clock
         s += [0xF0, 0x00]                      // program_info_length 0
         s.append(codec.streamType)
         s += pidBytes(videoPID, prefix: 0xE0)  // elementary_PID
         s += [0xF0, 0x00]                      // ES_info_length 0
+        if hasAudio {
+            s.append(audioStreamType)
+            s += pidBytes(audioPID, prefix: 0xE0)
+            s += [0xF0, 0x00]
+        }
         return withCRC(s)
     }
 
