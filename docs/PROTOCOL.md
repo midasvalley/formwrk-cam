@@ -69,7 +69,8 @@ printf 'state\n' | nc 127.0.0.1 9001
 | `set exposure on` | `ok exposure on` | lock (`on`) or auto (`off`) exposure; clears manual |
 | `set wb on` | `ok wb on` | lock or auto white balance; clears manual |
 | `set focuslock off` | `ok focuslock off` | release or re-lock focus |
-| `state` | see below | current settings |
+| `set iso 200 shutter 60 wb on focus 0.7` | `ok iso 200 shutter 60 wb on focus 0.7` | several pairs, validated together and applied as one look |
+| `state` | see below | what was asked for, then what the camera is doing |
 
 Flags accept `on`, `off`, `true`, `false`, `1`, `0`. Numbers are clamped to
 what the active format allows.
@@ -77,8 +78,14 @@ what the active format allows.
 `state` returns one line:
 
 ```
-rotation=90 size=2160x3840 fps=30 clients=1 zoom=1.0 exposure=auto +0.0EV wb=auto focus=locked 0.70
+rotation=90 size=2160x3840 fps=30 clients=1 zoom=1.0 exposure=manual iso=200 1/60 wb=locked focus=locked 0.70 | device exposure=custom iso=200 1/60 wb=locked focus=locked 0.70 queue=ok
 ```
+
+Everything before `| device` is the request. Everything after it is read off the
+camera itself, so a setting that did not land shows up as a mismatch between the
+two halves. `queue=stuck` means the capture session queue did not answer within
+half a second: no setting will apply until the app is relaunched.
+`./goblincam.py preset` checks the second half for you.
 
 `exposure` reads `auto <bias>EV`, `locked`, or `manual iso=<n> 1/<n>`. `wb`
 reads `auto`, `locked`, or `manual <k>K tint=<n>`. `focus` reads `auto` or
@@ -91,7 +98,7 @@ encoder. To know what is actually in the bitstream, ask ffprobe on port 9000.
 
 ```
 error rotate needs 0, 90, 180 or 270
-error set needs a key and a value
+error set needs key value pairs
 error unknown key <key>
 error <key> needs a number
 error <key> needs on or off

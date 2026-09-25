@@ -14,7 +14,9 @@
     ./goblincam.py auto             # hand them back to the camera
     ./goblincam.py set focus 0.7    # zoom bias iso shutter temp tint focus bitrate
     ./goblincam.py set exposure on  # exposure wb focuslock: on | off
-    ./goblincam.py state            # one line from the phone: rotation, size, fps, clients, look
+    ./goblincam.py set iso 200 shutter 60 wb on focus 0.7   # several at once, applied as one look
+    ./goblincam.py preset shorts    # orientation + the whole look, then checked against the camera
+    ./goblincam.py state            # one line from the phone: what was asked for | what the camera is doing
 
     setup takes --team ID, --bundle-id ID and --phone MODEL (e.g. iPhone18,2) when
     the defaults are not right. See docs/SETUP.md.
@@ -48,6 +50,15 @@ PROFILE_DIRS = ["~/Library/Developer/Xcode/UserData/Provisioning Profiles",
                 "~/Library/MobileDevice/Provisioning Profiles"]
 UUID_RE = r"\b[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}\b"
 ANGLES = {"portrait": 90, "landscape": 0, "portrait-flipped": 270, "landscape-flipped": 180}
+
+# A whole shot in one command: orientation plus a manual look. Manual rather than
+# auto because auto exposure chases whatever is brightest in a dim room and lifts
+# the background with it; a fixed ISO and shutter leave the key light in charge of
+# the face and the room dark. Tune per room in config.json under "presets".
+PRESETS = {
+    "shorts":   {"rotate": "portrait",  "look": {"iso": 200, "shutter": 60, "wb": "on", "focus": 0.7}},
+    "longform": {"rotate": "landscape", "look": {"iso": 200, "shutter": 60, "wb": "on", "focus": 0.7}},
+}
 
 
 def sh(*args, **kw):
@@ -348,6 +359,46 @@ def rotate(which):
         print(f"obs       {SOURCE} reconnected at the new size")
 
 
+def preset(name):
+    """Orientation and the whole look in one go, then read back off the device.
+
+    `state` has two halves: what was asked for, and after `| device` what the
+    camera is actually doing. This checks the second half, so a look that did not
+    land is reported as a failure instead of an `ok`."""
+    presets = {**PRESETS, **cfg().get("presets", {})}
+    if name not in presets:
+        sys.exit(f"preset needs one of: {', '.join(presets)}")
+    p = presets[name]
+    rotate(p["rotate"])
+    host, _ = endpoint(quiet=True)
+    pairs = " ".join(f"{k} {v}" for k, v in p["look"].items())
+    reply = control(f"set {pairs}", host)
+    if reply.startswith("error"):
+        sys.exit(f"phone said: {reply}")
+    time.sleep(1.5)  # exposure and focus settle over a few frames
+    state = control("state", host)
+    print(f"camera    {state}")
+    device = state.split("| device", 1)[1] if "| device" in state else ""
+    if not device:
+        sys.exit("check     this app build does not report the device -- run ./goblincam.py install")
+    problems = []
+    if "queue=stuck" in device:
+        problems.append("the camera queue is stuck, so nothing applies -- relaunch the app (./goblincam.py up after closing it)")
+    look_ = p["look"]
+    if "iso" in look_:
+        m = re.search(r"iso=(\d+)", device)
+        if not m or abs(int(m.group(1)) - float(look_["iso"])) > 0.15 * float(look_["iso"]):
+            problems.append(f"iso is {m.group(1) if m else '?'}, wanted {look_['iso']}")
+    if "shutter" in look_ and f"1/{int(look_['shutter'])}" not in device:
+        problems.append(f"shutter is not 1/{int(look_['shutter'])}")
+    if look_.get("wb") == "on" and "wb=locked" not in device:
+        problems.append("white balance is not locked")
+    if "focus" in look_ and "focus=locked" not in device:
+        problems.append("focus is not locked")
+    if problems:
+        sys.exit("check     " + "; ".join(problems))
+    print(f"check     {name}: the camera matches")
+
 def probe(host):
     """Read a little of the stream, then let ffprobe say what it is."""
     try:
@@ -611,8 +662,10 @@ def main():
         rotate(a[0])
     elif cmd in ("lock", "auto"):
         look(cmd)
-    elif cmd == "set" and len(a) == 2:
-        look(f"set {a[0]} {a[1]}")
+    elif cmd == "set" and a and len(a) % 2 == 0:
+        look("set " + " ".join(a))
+    elif cmd == "preset" and a:
+        preset(a[0])
     elif cmd == "state":
         host, _ = endpoint(quiet=True)
         print(control("state", host))
