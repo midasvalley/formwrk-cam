@@ -106,7 +106,7 @@ final class CaptureController: NSObject, ObservableObject {
         server.onNeedsKeyframe = { [weak self] in self?.forceKeyframe = true }
         server.onClientCountChanged = { [weak self] count in
             guard let self else { return }
-            self.sessionQueue.async { count > 0 ? self.startEncoder() : self.stopEncoder() }
+            self.outputQueue.async { count > 0 ? self.startEncoder() : self.stopEncoder() }
         }
     }
 
@@ -158,10 +158,8 @@ final class CaptureController: NSObject, ObservableObject {
         statsTimer?.invalidate()
         control.stop()
         server.stop()
-        sessionQueue.async {
-            self.stopEncoder()
-            self.session.stopRunning()
-        }
+        outputQueue.async { self.stopEncoder() }
+        sessionQueue.async { self.session.stopRunning() }
     }
 
     /// One control line from the Mac. Orientation is the only thing worth driving
@@ -195,32 +193,44 @@ final class CaptureController: NSObject, ObservableObject {
             }
             return "ok auto"
         case "set":
-            guard parts.count == 3 else { return "error set needs a key and a value" }
-            return apply(setting: parts[1], value: parts[2])
+            // One or more pairs: `set iso 200 shutter 60 wb on focus 0.7` is one look,
+            // validated whole and applied in one pass, never half of it.
+            let pairs = Array(parts.dropFirst())
+            guard !pairs.isEmpty, pairs.count % 2 == 0 else { return "error set needs key value pairs" }
+            var assignments: [() -> Void] = []
+            for i in stride(from: 0, to: pairs.count, by: 2) {
+                switch setting(pairs[i], value: pairs[i + 1]) {
+                case .failure(let message): return "error \(message)"
+                case .success(let assign): assignments.append(assign)
+                }
+            }
+            DispatchQueue.main.async { assignments.forEach { $0() } }
+            return "ok " + pairs.joined(separator: " ")
         case "state":
             return "rotation=\(rotation) size=\(outputSize) fps=\(frameRate) clients=\(stats.clients) "
                 + "zoom=\(String(format: "%.1f", zoom)) exposure=\(exposureSummary) wb=\(whiteBalanceSummary) "
-                + "focus=\(lockFocus ? String(format: "locked %.2f", lensPosition) : "auto")"
+                + "focus=\(lockFocus ? String(format: "locked %.2f", lensPosition) : "auto") "
+                + "| device \(deviceReadout())"
         default:
             return "error unknown command"
         }
     }
 
-    /// One `set key value` from the Mac. Each key drives the same published
-    /// property the on-screen control does, so the phone's UI stays in step.
-    private func apply(setting key: String, value: String) -> String {
-        func number(_ assign: @escaping (Double) -> Void) -> String {
-            guard let parsed = Double(value) else { return "error \(key) needs a number" }
-            DispatchQueue.main.async { assign(parsed) }
-            return "ok \(key) \(value)"
+    /// One `key value` from the Mac, parsed into the assignment it stands for. Each
+    /// key drives the same published property the on-screen control does, so the
+    /// phone's UI stays in step. Nothing is assigned here: `set` validates every
+    /// pair first, then runs them together on the main queue.
+    private func setting(_ key: String, value: String) -> Result<() -> Void, SettingError> {
+        func number(_ assign: @escaping (Double) -> Void) -> Result<() -> Void, SettingError> {
+            guard let parsed = Double(value) else { return .failure(SettingError("\(key) needs a number")) }
+            return .success { assign(parsed) }
         }
-        func flag(_ assign: @escaping (Bool) -> Void) -> String {
+        func flag(_ assign: @escaping (Bool) -> Void) -> Result<() -> Void, SettingError> {
             let on = ["on", "true", "1"].contains(value.lowercased())
             guard on || ["off", "false", "0"].contains(value.lowercased()) else {
-                return "error \(key) needs on or off"
+                return .failure(SettingError("\(key) needs on or off"))
             }
-            DispatchQueue.main.async { assign(on) }
-            return "ok \(key) \(on ? "on" : "off")"
+            return .success { assign(on) }
         }
 
         switch key {
@@ -237,8 +247,37 @@ final class CaptureController: NSObject, ObservableObject {
         case "wb": return flag { self.manualWhiteBalance = false; self.lockWhiteBalance = $0 }
         case "focuslock": return flag { self.lockFocus = $0 }
         default:
-            return "error unknown key \(key)"
+            return .failure(SettingError("unknown key \(key)"))
         }
+    }
+
+    struct SettingError: Error {
+        let message: String
+        init(_ message: String) { self.message = message }
+    }
+
+    /// What the camera is actually doing, read off the device rather than off the
+    /// settings we asked for. The first half of `state` is the request; this is the
+    /// answer, so a setting that never landed shows up as a mismatch instead of an `ok`.
+    /// `queue=stuck` means the session queue did not answer: settings will not apply.
+    private func deviceReadout() -> String {
+        let answered = DispatchSemaphore(value: 0)
+        sessionQueue.async { answered.signal() }
+        let queue = answered.wait(timeout: .now() + 0.5) == .success ? "ok" : "stuck"
+        guard let device else { return "none queue=\(queue)" }
+
+        let seconds = CMTimeGetSeconds(device.exposureDuration)
+        let shutter = seconds > 0 ? "1/\(Int((1 / seconds).rounded()))" : "?"
+        let exposure: String
+        switch device.exposureMode {
+        case .custom: exposure = "custom"
+        case .locked: exposure = "locked"
+        default: exposure = "auto"
+        }
+        let wb = device.whiteBalanceMode == .locked ? "locked" : "auto"
+        let focus = device.focusMode == .locked ? "locked" : "auto"
+        return "exposure=\(exposure) iso=\(Int(device.iso.rounded())) \(shutter) wb=\(wb) "
+            + "focus=\(focus) \(String(format: "%.2f", device.lensPosition)) queue=\(queue)"
     }
 
     private var exposureSummary: String {
@@ -310,7 +349,7 @@ final class CaptureController: NSObject, ObservableObject {
         sessionQueue.async {
             guard self.lensIndex < self.lenses.count else { return }
             self.applyLens(self.lenses[self.lensIndex])
-            self.restartEncoderIfRunning()
+            self.outputQueue.async { self.restartEncoderIfRunning() }
         }
     }
 
@@ -403,7 +442,7 @@ final class CaptureController: NSObject, ObservableObject {
             let mode: AVCaptureVideoStabilizationMode = self.stabilization ? .standard : .off
             if connection.isVideoStabilizationSupported { connection.preferredVideoStabilizationMode = mode }
             DispatchQueue.main.async { self.refreshOutputSize() }
-            self.restartEncoderIfRunning()
+            self.outputQueue.async { self.restartEncoderIfRunning() }
         }
     }
 
@@ -495,6 +534,15 @@ final class CaptureController: NSObject, ObservableObject {
 
     // MARK: - Encoder
 
+    // The encoder lives on `outputQueue`, the queue the camera delivers frames on:
+    // start, encode, stop and restart all run there and nowhere else. VideoToolbox
+    // does not tolerate a session being completed and invalidated on one thread
+    // while frames are still being submitted on another -- that is what used to
+    // hang `stop()` on the session queue when the last reader hung up, after which
+    // every exposure, white balance and rotation change queued behind it was
+    // accepted with `ok` and never applied. The session queue now only configures
+    // the camera, and nothing it waits on can block.
+
     private func startEncoder() {
         guard !encoderRunning, let device else { return }
         let dimensions = CMVideoFormatDescriptionGetDimensions(device.activeFormat.formatDescription)
@@ -509,11 +557,13 @@ final class CaptureController: NSObject, ObservableObject {
         do {
             try encoder.start(config)
             let hasAudio = audioInput != nil
-            muxQueue.sync {
-                muxer = TSMuxer(codec: codec, hasAudio: hasAudio)
-                ptsBase = nil
+            // Queued ahead of the first new access unit, which cannot reach the
+            // mux queue until the next frame is encoded on this queue.
+            muxQueue.async {
+                self.muxer = TSMuxer(codec: self.codec, hasAudio: hasAudio)
+                self.ptsBase = nil
             }
-            audioEncoder.stop()
+            audioQueue.async { self.audioEncoder.stop() }
             forceKeyframe = true
             encoderRunning = true
         } catch {
@@ -524,12 +574,12 @@ final class CaptureController: NSObject, ObservableObject {
     private func stopEncoder() {
         guard encoderRunning else { return }
         encoder.stop()
-        audioEncoder.stop()
+        audioQueue.async { self.audioEncoder.stop() }
         encoderRunning = false
     }
 
     private func restartEncoder() {
-        sessionQueue.async { self.restartEncoderIfRunning() }
+        outputQueue.async { self.restartEncoderIfRunning() }
     }
 
     private func restartEncoderIfRunning() {

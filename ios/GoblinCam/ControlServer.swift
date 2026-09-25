@@ -10,8 +10,8 @@ import Network
 ///     rotate 0|90|180|270   ->  ok <angle>
 ///     lock                  ->  ok locked      (exposure, white balance, focus)
 ///     auto                  ->  ok auto
-///     set <key> <value>     ->  ok <key> <value>
-///     state                 ->  rotation=90 size=2160x3840 fps=30 clients=1 ...
+///     set <key> <value> ... ->  ok <key> <value> ...   (one or more pairs, applied as one look)
+///     state                 ->  rotation=90 size=2160x3840 ... | device iso=200 1/60 ... queue=ok
 final class ControlServer {
 
     /// Handles one command line and returns the reply. Called off the main queue.

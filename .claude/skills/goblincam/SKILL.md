@@ -47,11 +47,29 @@ obs       <scene>: showing GoblinCam over usb (tcp://127.0.0.1:9000)
 
 ## Setting the look
 
-Defaults are all auto with HDR and Center Stage off. Once the shot is framed
-and has settled:
+One command sets a whole shot and checks it against the camera:
 
 ```
-./goblincam.py lock              # exposure + white balance stay put
+./goblincam.py preset shorts     # portrait, ISO 200, 1/60, WB locked, focus 0.7
+./goblincam.py preset longform   # the same look, landscape
+```
+
+It ends on `check     <preset>: the camera matches`, or names what did not land.
+The look is manual on purpose: auto exposure in a dim room lifts the background
+to meet the face, and a fixed ISO and shutter leave the key light in charge of
+brightness. Too dark or too bright is a key-light change, not a camera change.
+Tune the values for a room in `config.json` under `"presets"` (same shape as
+`PRESETS` in the script).
+
+`state` reads `<what was asked> | device <what the camera is doing>`. Trust the
+second half. `queue=stuck` there means no setting will apply until the app is
+relaunched.
+
+For a one-off tweak, several keys go in one `set`, applied as one look:
+
+```
+./goblincam.py set iso 250 shutter 60
+./goblincam.py lock              # exposure + white balance stay put where auto left them
 ./goblincam.py set focus 0.7     # lens position 0 (near) to 1 (far)
 ```
 
@@ -75,7 +93,7 @@ That order matters: rotating with a reader attached can leave the bitstream at
 the old size and the picture squashed. Tell the person to turn the phone in its
 mount to match. The app starts in landscape, and `obs on` relaunches the app
 whenever it has to take the camera back from Continuity Camera, which resets
-rotation and focus. So the order is `obs on`, then `rotate`, then `set focus`.
+rotation and focus. So the order is `obs on`, then `preset` (or `rotate`, then `set`).
 
 ## Verify with the stream, not with `state`
 
@@ -95,7 +113,8 @@ ffprobe -v error -show_entries stream=codec_name,width,height -of csv=p=0 tcp://
 | OBS log `MP: Failed to find stream info`, scene blank | the app died | `up`, then `obs off`, `obs on`, then re-set rotation and focus |
 | picture squashed / stretched | rotated with a reader attached | `obs off`, `rotate <o>`, `obs on` |
 | picture soft | autofocus on the background | `set focus 0.7` and adjust |
-| exposure or colour drifting mid-take | still on auto | `lock` |
+| exposure or colour drifting mid-take | still on auto | `preset shorts` or `lock` |
+| `set` says `ok` but the picture does not change | camera queue stuck (`state` shows `queue=stuck`); builds before 2026-09-25 hung it whenever the last reader hung up | relaunch the app; `install` the current build |
 | looks blown out or flat after switching cameras | OBS colour filters live on the source, not the camera | check filters on the `GoblinCam` source, not the phone |
 | red banner on the phone naming Portrait / Studio Light | system video effect on | Control Center > Video Effects, off |
 | `obs-websocket is switched off` / `OBS is not running` | OBS side | Tools > WebSocket Server Settings > Enable; open OBS |
