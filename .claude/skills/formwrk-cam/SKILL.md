@@ -1,25 +1,25 @@
 ---
-name: goblincam
-description: Use when someone wants an iPhone as the camera in OBS on a Mac. Triggers on "bring the phone camera into OBS", "set up GoblinCam", "start the phone camera", "the phone feed is gone", "rotate the camera", "portrait" / "landscape", "lock the exposure", "set the focus", "the picture is soft / stretched / late / blown out", "install the camera app on my phone". Runs goblincam.py in order, checks each step by its printed output, and knows the failure modes.
+name: formwrk-cam
+description: Use when someone wants an iPhone as the camera in OBS on a Mac. Triggers on "bring the phone camera into OBS", "set up FORMWRK Cam", "start the phone camera", "the phone feed is gone", "rotate the camera", "portrait" / "landscape", "lock the exposure", "set the focus", "the picture is soft / stretched / late / blown out", "install the camera app on my phone". Runs cam.py in order, checks each step by its printed output, and knows the failure modes.
 ---
 
-# GoblinCam
+# FORMWRK Cam
 
-Run everything from the repo root, the directory holding `goblincam.py`. Every
+Run everything from the repo root, the directory holding `cam.py`. Every
 command prints a few labelled lines; read them, do not assume.
 
 ## First time on this Mac
 
 ```
 brew install libimobiledevice xcodegen ffmpeg uv    # once
-./goblincam.py setup                                  # team, config.json, Xcode project
-./goblincam.py install                                # build + push to the plugged-in phone
+./cam.py setup                                  # team, config.json, Xcode project
+./cam.py install                                # build + push to the plugged-in phone
 ```
 
 `setup` finds the Apple team on its own when this Mac has built an iOS app
-before. If it says no team was found, it has generated `ios/GoblinCam.xcodeproj`
+before. If it says no team was found, it has generated `ios/FormwrkCam.xcodeproj`
 without one: ask the person to open that project in Xcode, pick their Team
-under the GoblinCam target > Signing & Capabilities, then run `setup` again.
+under the FormwrkCam target > Signing & Capabilities, then run `setup` again.
 Do not guess a team id.
 
 `install` needs the phone plugged in, unlocked, trusted, with Developer Mode on.
@@ -30,8 +30,8 @@ recording is in progress: it replaces the running app and kills the feed.
 ## Every session
 
 ```
-./goblincam.py up          # tunnel, launch the app if needed, probe the stream
-./goblincam.py obs on      # GoblinCam media source into the current OBS scene
+./cam.py up          # tunnel, launch the app if needed, probe the stream
+./cam.py obs on      # FORMWRK Cam media source into the current OBS scene
 ```
 
 Good looks like:
@@ -40,18 +40,18 @@ Good looks like:
 transport USB   <name> -> 127.0.0.1:9000
 camera    rotation=0 size=3840x2160 fps=30 clients=0 ...
 stream    hevc 3840x2160 @ 30fps
-obs       <scene>: showing GoblinCam over usb (tcp://127.0.0.1:9000)
+obs       <scene>: showing FORMWRK Cam over usb (tcp://127.0.0.1:9000)
 ```
 
-`./goblincam.py status` any time gives the same picture without changing anything.
+`./cam.py status` any time gives the same picture without changing anything.
 
 ## Setting the look
 
 One command sets a whole shot and checks it against the camera:
 
 ```
-./goblincam.py preset shorts     # portrait, ISO 200, 1/60, WB locked, focus 0.7
-./goblincam.py preset longform   # the same look, landscape
+./cam.py preset shorts     # portrait, ISO 200, 1/60, WB locked, focus 0.7
+./cam.py preset longform   # the same look, landscape
 ```
 
 It ends on `check     <preset>: the camera matches`, or names what did not land.
@@ -68,9 +68,9 @@ relaunched.
 For a one-off tweak, several keys go in one `set`, applied as one look:
 
 ```
-./goblincam.py set iso 250 shutter 60
-./goblincam.py lock              # exposure + white balance stay put where auto left them
-./goblincam.py set focus 0.7     # lens position 0 (near) to 1 (far)
+./cam.py set iso 250 shutter 60
+./cam.py lock              # exposure + white balance stay put where auto left them
+./cam.py set focus 0.7     # lens position 0 (near) to 1 (far)
 ```
 
 Focus is deliberately not part of `lock`: autofocus does not reliably land on a
@@ -85,7 +85,7 @@ focuslock on|off`. Full table in the README.
 ## Orientation
 
 ```
-./goblincam.py rotate portrait     # or landscape, portrait-flipped, landscape-flipped
+./cam.py rotate portrait     # or landscape, portrait-flipped, landscape-flipped
 ```
 
 The command hides the OBS source, turns the camera, and shows the source again.
@@ -115,7 +115,7 @@ ffprobe -v error -show_entries stream=codec_name,width,height -of csv=p=0 tcp://
 | picture soft | autofocus on the background | `set focus 0.7` and adjust |
 | exposure or colour drifting mid-take | still on auto | `preset shorts` or `lock` |
 | `set` says `ok` but the picture does not change | camera queue stuck (`state` shows `queue=stuck`); builds before 2026-09-25 hung it whenever the last reader hung up | relaunch the app; `install` the current build |
-| looks blown out or flat after switching cameras | OBS colour filters live on the source, not the camera | check filters on the `GoblinCam` source, not the phone |
+| looks blown out or flat after switching cameras | OBS colour filters live on the source, not the camera | check filters on the `FORMWRK Cam` source, not the phone |
 | red banner on the phone naming Portrait / Studio Light | system video effect on | Control Center > Video Effects, off |
 | `obs-websocket is switched off` / `OBS is not running` | OBS side | Tools > WebSocket Server Settings > Enable; open OBS |
 | app will not launch after a week | free Personal Team signature expired | `install` |
@@ -127,7 +127,7 @@ grows over a session. Do not set an OBS sync offset; it will be wrong by the
 next connection. Fix each clip in post.
 
 The feed carries the phone's microphone beside the picture, arriving exactly as
-late as the picture does. Put `GoblinCam` on its own OBS recording track (the
+late as the picture does. Put `FORMWRK Cam` on its own OBS recording track (the
 real mic on 1 and 2, the phone on 3, the recording writing 1 and 3) and the lag
 is whatever offset lines the two audio tracks up -- to within a frame or two,
 and measurable in windows so drift through a long take is visible. Never mix that track into the
@@ -144,4 +144,4 @@ both procedures and the ffmpeg command that survives server-side re-encoding.
 - Rotate while the OBS item is showing by any path other than `rotate`.
 - Put a sync offset in OBS's Advanced Audio Properties for this source.
 - Trust `state`'s `size`; ask ffprobe.
-- Commit `config.json` or `ios/GoblinCam.xcodeproj`; both are generated and gitignored.
+- Commit `config.json` or `ios/FormwrkCam.xcodeproj`; both are generated and gitignored.

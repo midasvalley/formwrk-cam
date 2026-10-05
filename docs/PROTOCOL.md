@@ -1,11 +1,11 @@
 # The two ports
 
-Everything `goblincam.py` does goes through two TCP ports on the phone. Both
+Everything `cam.py` does goes through two TCP ports on the phone. Both
 are plain enough to drive from `nc`, ffmpeg, or a few lines in any language.
 
 Over USB, `iproxy` forwards the same port numbers on `127.0.0.1` to the phone
-through usbmuxd. Over Wi-Fi, the phone advertises `_goblincam._tcp` by Bonjour
-under the instance name `GoblinCam`, and you connect to its address directly.
+through usbmuxd. Over Wi-Fi, the phone advertises `_formwrkcam._tcp` by Bonjour
+under the instance name `FORMWRK Cam`, and you connect to its address directly.
 
 ## 9000: the picture
 
@@ -85,7 +85,7 @@ Everything before `| device` is the request. Everything after it is read off the
 camera itself, so a setting that did not land shows up as a mismatch between the
 two halves. `queue=stuck` means the capture session queue did not answer within
 half a second: no setting will apply until the app is relaunched.
-`./goblincam.py preset` checks the second half for you.
+`./cam.py preset` checks the second half for you.
 
 `exposure` reads `auto <bias>EV`, `locked`, or `manual iso=<n> 1/<n>`. `wb`
 reads `auto`, `locked`, or `manual <k>K tint=<n>`. `focus` reads `auto` or

@@ -17,7 +17,7 @@ final class ControlServer {
     /// Handles one command line and returns the reply. Called off the main queue.
     var onCommand: ((String) -> String)?
 
-    private let queue = DispatchQueue(label: "goblincam.control")
+    private let queue = DispatchQueue(label: "formwrkcam.control")
     private var listener: NWListener?
     private var boundPort: UInt16 = 0
     private var stopped = true

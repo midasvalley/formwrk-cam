@@ -13,7 +13,7 @@ platform when it asks (Xcode > Settings > Components if it does not).
 what signs the app.
 
 - A free Apple ID gives you a "Personal Team". Apps it signs stop launching
-  after seven days, so you run `./goblincam.py install` again each week. It also
+  after seven days, so you run `./cam.py install` again each week. It also
   caps you at three such apps on one phone.
 - A paid Apple Developer Program membership signs for a year.
 
@@ -28,7 +28,7 @@ brew install libimobiledevice xcodegen ffmpeg uv
 | `libimobiledevice` | `idevice_id` sees the phone on USB; `iproxy` bridges a Mac port to it through usbmuxd |
 | `xcodegen` | generates the Xcode project from `ios/project.yml` with your team and bundle id |
 | `ffmpeg` | `ffprobe` reads the stream back so `status` can say what is flowing |
-| `uv` | runs `goblincam.py` with its one Python dependency, nothing to install by hand |
+| `uv` | runs `cam.py` with its one Python dependency, nothing to install by hand |
 
 **OBS.** Tools > WebSocket Server Settings > tick Enable WebSocket server >
 Apply. Leave authentication on; the script reads the port and password from the
@@ -60,24 +60,24 @@ plugged into a Mac with Xcode on it, so if it is missing, plug in first.
 From the repo:
 
 ```
-./goblincam.py setup
+./cam.py setup
 ```
 
 It looks for your Apple team in the provisioning profiles Xcode keeps and
 writes `config.json` (gitignored) with the team, a bundle id, and optionally
-the phone model. Then it generates `ios/GoblinCam.xcodeproj`.
+the phone model. Then it generates `ios/FormwrkCam.xcodeproj`.
 
 - Brand-new Mac with no iOS build behind it: `setup` generates the project
   without a team and tells you to open it in Xcode, pick your Team under the
-  GoblinCam target > Signing & Capabilities, and run `setup` again. Or pass
+  FormwrkCam target > Signing & Capabilities, and run `setup` again. Or pass
   `--team ID` (developer.apple.com/account > Membership details).
-- Two iPhones? `./goblincam.py setup --phone iPhone18,2` pins the model, which
+- Two iPhones? `./cam.py setup --phone iPhone18,2` pins the model, which
   `xcrun devicectl list devices` shows in its last column.
-- Want your own bundle id? `--bundle-id com.you.goblincam`. The default is
-  `com.goblincam.<your team id>`, which cannot collide with anyone else's.
+- Want your own bundle id? `--bundle-id com.you.formwrkcam`. The default is
+  `com.formwrkcam.<your team id>`, which cannot collide with anyone else's.
 
 ```
-./goblincam.py install
+./cam.py install
 ```
 
 Builds with `xcodebuild` and pushes the app with `devicectl`. The first build
@@ -93,13 +93,13 @@ first time too: Allow. That is the Wi-Fi path, and USB does not use it.
 
 **Video effects.** While a camera app is open, Control Center shows Video
 Effects. Portrait, Studio Light, Reactions and Background must all be off; no
-app can switch them off itself, so GoblinCam shows a red banner while any is
+app can switch them off itself, so FORMWRK Cam shows a red banner while any is
 on. Center Stage is handled in the app and is already off.
 
 ## 4. Run it
 
 ```
-./goblincam.py up
+./cam.py up
 ```
 
 ```
@@ -113,10 +113,10 @@ that). On the phone the dot in the status bar goes yellow while it waits and
 green when a client is connected.
 
 ```
-./goblincam.py obs on
+./cam.py obs on
 ```
 
-Adds a media source called `GoblinCam` to the current OBS scene, or points the
+Adds a media source called `FORMWRK Cam` to the current OBS scene, or points the
 existing one at the live transport, and shows it. Size it in OBS as you would
 any source. Then frame, `lock`, `set focus`, and record.
 
@@ -131,16 +131,16 @@ network permission from step 3. Expect a lower safe bitrate than over USB.
 
 | you see | it means | do |
 |---|---|---|
-| `no iPhone on USB and nothing advertising GoblinCam` | the Mac cannot see the phone | data cable, unlock, Trust This Computer, `idevice_id -l` |
+| `no iPhone on USB and nothing advertising FORMWRK Cam` | the Mac cannot see the phone | data cable, unlock, Trust This Computer, `idevice_id -l` |
 | `xcodebuild` fails on signing | no Apple ID in Xcode, or no team in `config.json` | Xcode > Settings > Accounts, then `setup` again |
 | "Untrusted Developer" on the phone | first launch of a development-signed app | Settings > General > VPN & Device Management > Trust |
-| the app will not open after a week | free Personal Team signature expired | `./goblincam.py install` |
-| `phone said: error Connection refused` | the app is not running | unlock the phone, `./goblincam.py up` |
-| `stream nothing on 127.0.0.1:9000` | tunnel is up, app is not serving | open GoblinCam on the phone; check the dot in its status bar |
-| OBS log says `MP: Failed to find stream info` and the scene goes blank | the app died mid-session | `./goblincam.py up`, then `obs off` and `obs on` |
+| the app will not open after a week | free Personal Team signature expired | `./cam.py install` |
+| `phone said: error Connection refused` | the app is not running | unlock the phone, `./cam.py up` |
+| `stream nothing on 127.0.0.1:9000` | tunnel is up, app is not serving | open FORMWRK Cam on the phone; check the dot in its status bar |
+| OBS log says `MP: Failed to find stream info` and the scene goes blank | the app died mid-session | `./cam.py up`, then `obs off` and `obs on` |
 | the picture is squashed into the wrong shape | rotated while OBS was reading | `obs off`, `rotate <orientation>`, `obs on` |
-| the picture is soft | autofocus settled on the background | `./goblincam.py set focus 0.7`, adjust, check the picture |
+| the picture is soft | autofocus settled on the background | `./cam.py set focus 0.7`, adjust, check the picture |
 | red banner on the phone naming Portrait or Studio Light | a system video effect is on | Control Center > Video Effects, turn it off |
-| exposure or colour drifts during a take | auto exposure or white balance still on | `./goblincam.py lock` once the shot has settled |
+| exposure or colour drifts during a take | auto exposure or white balance still on | `./cam.py lock` once the shot has settled |
 | `obs-websocket is switched off` | OBS's WebSocket server is not enabled | Tools > WebSocket Server Settings > Enable |
 | `OBS is not running` | nothing on the websocket port | open OBS |

@@ -15,7 +15,7 @@ number for the whole thing.
 
 It is a 64 kb/s mono reference, not content. Never mix it into the recording.
 
-**In OBS:** put `GoblinCam` on a recording track of its own (track 3, say),
+**In OBS:** put `FORMWRK Cam` on a recording track of its own (track 3, say),
 the real mic on tracks 1 and 2, and set the recording to write tracks 1 and 3.
 Check the level meter moves before you record -- a silent track means the app
 has no microphone permission, and the fallback below is what you have.

@@ -45,7 +45,7 @@ final class VideoEncoder {
             compressionSessionOut: &session)
 
         guard status == noErr, let session else {
-            throw NSError(domain: "GoblinCam.VideoEncoder", code: Int(status),
+            throw NSError(domain: "FormwrkCam.VideoEncoder", code: Int(status),
                           userInfo: [NSLocalizedDescriptionKey: "could not create the \(config.codec) encoder (OSStatus \(status))"])
         }
         self.session = session

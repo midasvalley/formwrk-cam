@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct GoblinCamApp: App {
+struct FormwrkCamApp: App {
     @StateObject private var camera = CaptureController()
     @Environment(\.scenePhase) private var scenePhase
 

@@ -32,7 +32,7 @@ final class StreamServer {
     /// queue, because queueing on a live feed just turns into latency.
     private let maxPendingBytes = 4 * 1024 * 1024
 
-    private let queue = DispatchQueue(label: "goblincam.server")
+    private let queue = DispatchQueue(label: "formwrkcam.server")
     private var listener: NWListener?
     private var clients: [ObjectIdentifier: Client] = [:]
     private var stats = Stats()
@@ -82,7 +82,7 @@ final class StreamServer {
             stats.listening = false
             return
         }
-        listener.service = NWListener.Service(name: "GoblinCam", type: "_goblincam._tcp")
+        listener.service = NWListener.Service(name: "FORMWRK Cam", type: "_formwrkcam._tcp")
         listener.newConnectionHandler = { [weak self] in self?.accept($0) }
         listener.stateUpdateHandler = { [weak self] state in
             guard let self else { return }
