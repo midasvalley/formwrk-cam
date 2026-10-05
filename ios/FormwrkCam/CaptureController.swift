@@ -69,16 +69,16 @@ final class CaptureController: NSObject, ObservableObject {
     private let server = StreamServer()
     private let control = ControlServer()
     private var muxer = TSMuxer(codec: .hevc)
-    private let sessionQueue = DispatchQueue(label: "goblincam.session")
-    private let outputQueue = DispatchQueue(label: "goblincam.output")
+    private let sessionQueue = DispatchQueue(label: "formwrkcam.session")
+    private let outputQueue = DispatchQueue(label: "formwrkcam.output")
     /// Video and audio are encoded on different queues but share one muxer and one
     /// socket, and a transport stream is a single ordered sequence with a
     /// continuity counter per PID. Everything that touches the muxer goes through
     /// here, in the order it arrives.
-    private let muxQueue = DispatchQueue(label: "goblincam.mux")
+    private let muxQueue = DispatchQueue(label: "formwrkcam.mux")
     private let output = AVCaptureVideoDataOutput()
     private let audioOutput = AVCaptureAudioDataOutput()
-    private let audioQueue = DispatchQueue(label: "goblincam.audio")
+    private let audioQueue = DispatchQueue(label: "formwrkcam.audio")
 
     private var device: AVCaptureDevice?
     private var input: AVCaptureDeviceInput?

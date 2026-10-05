@@ -16,11 +16,11 @@ cd "$(dirname "$0")"
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 FAIL=0
 
-swiftc -O ../GoblinCam/TSMuxer.swift tsmux_harness.swift -o "$WORK/muxtest"
+swiftc -O ../FormwrkCam/TSMuxer.swift tsmux_harness.swift -o "$WORK/muxtest"
 
 # The lead PTS holds over PCR is a design constant in the muxer; read it from
 # there so the test follows the design rather than a number copied once.
-LEAD=$(sed -n 's/.*ptsLeadTicks: Int64 = \([0-9_]*\).*/\1/p' ../GoblinCam/TSMuxer.swift | tr -d _)
+LEAD=$(sed -n 's/.*ptsLeadTicks: Int64 = \([0-9_]*\).*/\1/p' ../FormwrkCam/TSMuxer.swift | tr -d _)
 [ -n "$LEAD" ] || { echo "could not read ptsLeadTicks from TSMuxer.swift"; exit 1; }
 WANT_PTS="$LEAD,$((LEAD + 3000)),$((LEAD + 6000))"   # then 1/30 s at 90 kHz
 

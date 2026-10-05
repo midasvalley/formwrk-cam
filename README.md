@@ -1,10 +1,10 @@
-# GoblinCam
+# FORMWRK Cam
 
 An iPhone as a 4K camera for OBS on a Mac, over the USB cable, with focus,
 exposure, white balance and orientation set from the terminal.
 
 Every step is a command, so an agent can run the camera for you. The repo ships
-a [Claude Code skill](.claude/skills/goblincam/SKILL.md): open Claude Code in
+a [Claude Code skill](.claude/skills/formwrk-cam/SKILL.md): open Claude Code in
 this directory and say "bring the phone camera into OBS".
 
 ## Why not Continuity Camera
@@ -14,7 +14,7 @@ A vertical shot is the middle 9:16 column of that, about 608 pixels wide,
 scaled up. Center Stage picks its own zoom and drifts while you talk. Auto HDR
 re-grades the picture mid-take.
 
-GoblinCam sends 3840x2160 straight off the sensor, HEVC or H.264 in hardware,
+FORMWRK Cam sends 3840x2160 straight off the sensor, HEVC or H.264 in hardware,
 at whatever bitrate you set. Turn it to portrait and it is 2160x3840 with nothing
 thrown away. Center Stage and HDR are off. Exposure, white balance and focus
 lock where you put them.
@@ -22,7 +22,7 @@ lock where you put them.
 | | frame | controls |
 |---|---|---|
 | Continuity Camera | 1920x1080, landscape only | none |
-| GoblinCam | 3840x2160 or 2160x3840 | lens, fps, codec, bitrate, zoom, focus, exposure, white balance, orientation |
+| FORMWRK Cam | 3840x2160 or 2160x3840 | lens, fps, codec, bitrate, zoom, focus, exposure, white balance, orientation |
 
 The cost is latency: the picture reaches OBS half a second to a second late.
 Right for recording, where you fix that afterwards. Wrong for a live call.
@@ -45,11 +45,11 @@ from your Mac on a development certificate.
 
 ```
 brew install libimobiledevice xcodegen ffmpeg uv
-git clone https://github.com/midasvalley/goblincam.git && cd goblincam
-./goblincam.py setup        # finds your Apple team, writes config.json, makes the Xcode project
-./goblincam.py install      # builds the app and puts it on the plugged-in phone
-./goblincam.py up           # opens the USB tunnel, launches the app, reports the stream
-./goblincam.py obs on       # adds a GoblinCam media source to the current OBS scene
+git clone https://github.com/midasvalley/formwrk-cam.git && cd formwrk-cam
+./cam.py setup        # finds your Apple team, writes config.json, makes the Xcode project
+./cam.py install      # builds the app and puts it on the plugged-in phone
+./cam.py up           # opens the USB tunnel, launches the app, reports the stream
+./cam.py obs on       # adds a FORMWRK Cam media source to the current OBS scene
 ```
 
 The phone and the Mac each show a few prompts along the way (Trust This
@@ -59,20 +59,20 @@ through every one.
 ## Commands
 
 ```
-./goblincam.py setup [--team ID] [--bundle-id ID] [--phone MODEL]
-./goblincam.py install
-./goblincam.py status           # phone, tunnel, camera state, what the stream is
-./goblincam.py up               # USB if plugged in, else Wi-Fi; launches the app if it is not running
-./goblincam.py down             # close the USB tunnel
-./goblincam.py obs on           # show the GoblinCam source in the current scene
-./goblincam.py obs off          # hide it; the phone stops encoding
-./goblincam.py obs continuity   # swap to Apple's Continuity Camera in the same spot
-./goblincam.py rotate portrait  # portrait | landscape | portrait-flipped | landscape-flipped
-./goblincam.py lock             # freeze exposure and white balance where they are
-./goblincam.py auto             # hand them back to the camera
-./goblincam.py set focus 0.7    # zoom bias iso shutter temp tint focus bitrate
-./goblincam.py set exposure on  # exposure wb focuslock: on | off
-./goblincam.py state            # one line: rotation, size, fps, clients, exposure, wb, focus
+./cam.py setup [--team ID] [--bundle-id ID] [--phone MODEL]
+./cam.py install
+./cam.py status           # phone, tunnel, camera state, what the stream is
+./cam.py up               # USB if plugged in, else Wi-Fi; launches the app if it is not running
+./cam.py down             # close the USB tunnel
+./cam.py obs on           # show the FORMWRK Cam source in the current scene
+./cam.py obs off          # hide it; the phone stops encoding
+./cam.py obs continuity   # swap to Apple's Continuity Camera in the same spot
+./cam.py rotate portrait  # portrait | landscape | portrait-flipped | landscape-flipped
+./cam.py lock             # freeze exposure and white balance where they are
+./cam.py auto             # hand them back to the camera
+./cam.py set focus 0.7    # zoom bias iso shutter temp tint focus bitrate
+./cam.py set exposure on  # exposure wb focuslock: on | off
+./cam.py state            # one line: rotation, size, fps, clients, exposure, wb, focus
 ```
 
 `obs on` creates the media source if the scene does not have one and points it
@@ -85,8 +85,8 @@ Start on the defaults: everything auto, HDR and Center Stage off. Frame the
 shot, let the camera settle, then:
 
 ```
-./goblincam.py lock             # exposure and white balance stay where they landed
-./goblincam.py set focus 0.7    # a lens position from 0 (close) to 1 (far)
+./cam.py lock             # exposure and white balance stay where they landed
+./cam.py set focus 0.7    # a lens position from 0 (close) to 1 (far)
 ```
 
 `lock` leaves focus alone on purpose. Autofocus does not reliably land on a
@@ -115,7 +115,7 @@ Lens, size (4K or 1080p), frame rate and codec are on the phone's own screen.
 ## Orientation
 
 ```
-./goblincam.py rotate portrait
+./cam.py rotate portrait
 ```
 
 Turns the sensor's output, then turns the phone in its mount yourself. The
@@ -138,7 +138,7 @@ iPhone  --USB--> usbmuxd --> iproxy --> 127.0.0.1:9000 --> OBS media source
 ```
 
 Over USB nothing touches the network and the phone charges while it shoots.
-Unplugged, the app advertises `_goblincam._tcp` and `up` finds it on Wi-Fi.
+Unplugged, the app advertises `_formwrkcam._tcp` and `up` finds it on Wi-Fi.
 Nothing is encoded until a client connects.
 
 MPEG-TS rather than a raw stream because TS carries real timestamps. A raw

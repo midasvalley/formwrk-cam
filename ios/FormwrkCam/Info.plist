@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>GoblinCam</string>
+	<string>FORMWRK Cam</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -40,14 +40,14 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<false/>
 	<key>NSCameraUsageDescription</key>
-	<string>GoblinCam uses the camera to send a 4K vertical video feed to your Mac.</string>
+	<string>FORMWRK Cam uses the camera to send a 4K vertical video feed to your Mac.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>GoblinCam sends the phone microphone alongside the picture, so the video delay can be measured against your real microphone afterwards.</string>
+	<string>FORMWRK Cam sends the phone microphone alongside the picture, so the video delay can be measured against your real microphone afterwards.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>GoblinCam serves the video feed to your Mac over the local network. Not needed when connected by USB.</string>
+	<string>FORMWRK Cam serves the video feed to your Mac over the local network. Not needed when connected by USB.</string>
 	<key>NSBonjourServices</key>
 	<array>
-		<string>_goblincam._tcp</string>
+		<string>_formwrkcam._tcp</string>
 	</array>
 </dict>
 </plist>

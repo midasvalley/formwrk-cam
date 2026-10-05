@@ -1,22 +1,22 @@
 #!/usr/bin/env -S uv run --quiet --with websocket-client python
-"""GoblinCam: run the phone camera from the Mac and point OBS at it.
+"""FORMWRK Cam: run the phone camera from the Mac and point OBS at it.
 
-    ./goblincam.py setup            # find your Apple team, write config.json, generate the Xcode project
-    ./goblincam.py install          # build the app and install it on the phone over USB
-    ./goblincam.py status           # phone, tunnel, camera state, what the stream is
-    ./goblincam.py up               # open the USB tunnel (or find the phone on Wi-Fi), launch the app, probe
-    ./goblincam.py down             # close the USB tunnel
-    ./goblincam.py obs on           # show the `GoblinCam` media source in the current OBS scene
-    ./goblincam.py obs off          # hide it (the phone stops encoding)
-    ./goblincam.py obs continuity   # swap to Apple's Continuity Camera in the same spot
-    ./goblincam.py rotate portrait  # portrait | landscape | portrait-flipped | landscape-flipped
-    ./goblincam.py lock             # freeze exposure and white balance where they are
-    ./goblincam.py auto             # hand them back to the camera
-    ./goblincam.py set focus 0.7    # zoom bias iso shutter temp tint focus bitrate
-    ./goblincam.py set exposure on  # exposure wb focuslock: on | off
-    ./goblincam.py set iso 200 shutter 60 wb on focus 0.7   # several at once, applied as one look
-    ./goblincam.py preset shorts    # orientation + the whole look, then checked against the camera
-    ./goblincam.py state            # one line from the phone: what was asked for | what the camera is doing
+    ./cam.py setup            # find your Apple team, write config.json, generate the Xcode project
+    ./cam.py install          # build the app and install it on the phone over USB
+    ./cam.py status           # phone, tunnel, camera state, what the stream is
+    ./cam.py up               # open the USB tunnel (or find the phone on Wi-Fi), launch the app, probe
+    ./cam.py down             # close the USB tunnel
+    ./cam.py obs on           # show the `FORMWRK Cam` media source in the current OBS scene
+    ./cam.py obs off          # hide it (the phone stops encoding)
+    ./cam.py obs continuity   # swap to Apple's Continuity Camera in the same spot
+    ./cam.py rotate portrait  # portrait | landscape | portrait-flipped | landscape-flipped
+    ./cam.py lock             # freeze exposure and white balance where they are
+    ./cam.py auto             # hand them back to the camera
+    ./cam.py set focus 0.7    # zoom bias iso shutter temp tint focus bitrate
+    ./cam.py set exposure on  # exposure wb focuslock: on | off
+    ./cam.py set iso 200 shutter 60 wb on focus 0.7   # several at once, applied as one look
+    ./cam.py preset shorts    # orientation + the whole look, then checked against the camera
+    ./cam.py state            # one line from the phone: what was asked for | what the camera is doing
 
     setup takes --team ID, --bundle-id ID and --phone MODEL (e.g. iPhone18,2) when
     the defaults are not right. See docs/SETUP.md.
@@ -26,7 +26,7 @@ transports:
 
   USB   plugged in, usbmuxd carries it and `iproxy` bridges a local port. No
         network involved and the phone charges while it shoots.
-  Wi-Fi unplugged, the app advertises `_goblincam._tcp` and we dial it directly.
+  Wi-Fi unplugged, the app advertises `_formwrkcam._tcp` and we dial it directly.
 
 `up` picks whichever is available, preferring USB, and `obs on` writes the
 matching URL into the source. So unplugging the phone costs one command.
@@ -36,13 +36,13 @@ import websocket
 
 PORT = 9000
 CONTROL_PORT = 9001
-SOURCE = "GoblinCam"        # the OBS media source this script creates and drives
+SOURCE = "FORMWRK Cam"      # the OBS media source this script creates and drives
 CONTINUITY = "Continuity"   # the OBS camera source it creates for Apple's Continuity Camera
-SERVICE = "_goblincam._tcp"
+SERVICE = "_formwrkcam._tcp"
 HERE = os.path.dirname(os.path.abspath(__file__))
 CONFIG = os.path.join(HERE, "config.json")
 IOS = os.path.join(HERE, "ios")
-PROJECT = os.path.join(IOS, "GoblinCam.xcodeproj")
+PROJECT = os.path.join(IOS, "FormwrkCam.xcodeproj")
 BUILD = os.path.join(IOS, "build")
 OBS_CFG = os.path.expanduser(
     "~/Library/Application Support/obs-studio/plugin_config/obs-websocket/config.json")
@@ -155,20 +155,20 @@ def setup(args):
             print(f"team      {c['team']}  (from the provisioning profiles on this Mac)")
         elif teams:
             sys.exit("this Mac has signed for more than one team (" + ", ".join(sorted(teams))
-                     + "): run  ./goblincam.py setup --team ID")
+                     + "): run  ./cam.py setup --team ID")
         else:
             # Nothing on this Mac names a team yet. Xcode can: generate the
             # project without one, let Xcode write the team into it, and the
             # next run reads it back.
-            generate_project({"team": "", "bundle_id": c.get("bundle_id", "com.goblincam.app")})
-            sys.exit("no Apple team found on this Mac yet. Open ios/GoblinCam.xcodeproj in Xcode,\n"
-                     "select the GoblinCam target > Signing & Capabilities, pick your Team, then run\n"
-                     "  ./goblincam.py setup  again. Or pass it:  ./goblincam.py setup --team ID")
+            generate_project({"team": "", "bundle_id": c.get("bundle_id", "com.formwrkcam.app")})
+            sys.exit("no Apple team found on this Mac yet. Open ios/FormwrkCam.xcodeproj in Xcode,\n"
+                     "select the FormwrkCam target > Signing & Capabilities, pick your Team, then run\n"
+                     "  ./cam.py setup  again. Or pass it:  ./cam.py setup --team ID")
     else:
         print(f"team      {c['team']}")
     # Bundle ids are unique across Apple's developer portal, so the default
     # carries your team id rather than a name everyone would collide on.
-    c.setdefault("bundle_id", f"com.goblincam.{c['team'].lower()}")
+    c.setdefault("bundle_id", f"com.formwrkcam.{c['team'].lower()}")
     print(f"bundle    {c['bundle_id']}")
     if c.get("phone"):
         print(f"phone     {c['phone']}")
@@ -178,18 +178,18 @@ def setup(args):
         f.write("\n")
     print(f"config    {CONFIG}")
     generate_project(c)
-    print("next      ./goblincam.py install")
+    print("next      ./cam.py install")
 
 
 def install():
     c = cfg()
     if not c.get("team"):
-        sys.exit("no config.json yet:  ./goblincam.py setup")
+        sys.exit("no config.json yet:  ./cam.py setup")
     generate_project(c)
 
     found = devices()
     print(f"building  for {found[0][1] if found else 'the phone paired over the network'}")
-    r = subprocess.run(["xcodebuild", "-project", PROJECT, "-scheme", "GoblinCam",
+    r = subprocess.run(["xcodebuild", "-project", PROJECT, "-scheme", "FormwrkCam",
                         "-sdk", "iphoneos", "-destination", "generic/platform=iOS",
                         "-configuration", "Debug", "-derivedDataPath", BUILD,
                         "-allowProvisioningUpdates", "build"],
@@ -197,7 +197,7 @@ def install():
     if r.returncode:
         print("\n".join(l for l in r.stdout.splitlines() if "error:" in l)[-4000:] or r.stderr[-2000:])
         sys.exit("build failed")
-    app_path = os.path.join(BUILD, "Build", "Products", "Debug-iphoneos", "GoblinCam.app")
+    app_path = os.path.join(BUILD, "Build", "Products", "Debug-iphoneos", "FormwrkCam.app")
 
     device = found[0][0] if found else device_id()
     if not device:
@@ -205,8 +205,8 @@ def install():
     r = sh("xcrun", "devicectl", "device", "install", "app", "--device", device, app_path)
     if r.returncode:
         sys.exit(r.stdout + r.stderr)
-    print("installed. Unlock the phone, open GoblinCam once (it asks for the camera), then:")
-    print("          ./goblincam.py up")
+    print("installed. Unlock the phone, open FORMWRK Cam once (it asks for the camera), then:")
+    print("          ./cam.py up")
 
 
 # --- finding the phone -------------------------------------------------------
@@ -273,8 +273,8 @@ def endpoint(quiet=False):
         sys.exit("iproxy would not start")
     host = bonjour_host()
     if not host:
-        sys.exit("no iPhone on USB and nothing advertising GoblinCam on the network.\n"
-                 "Plug the phone in (and tap Trust on it), or open GoblinCam on the phone.")
+        sys.exit("no iPhone on USB and nothing advertising FORMWRK Cam on the network.\n"
+                 "Plug the phone in (and tap Trust on it), or open FORMWRK Cam on the phone.")
     if not quiet:
         print(f"transport Wi-Fi {host}:{PORT}")
     return host, "wifi"
@@ -297,7 +297,7 @@ def device_id():
 
 
 def app(action):
-    """Launch or kill GoblinCam on the phone. Continuity cannot have the camera
+    """Launch or kill FORMWRK Cam on the phone. Continuity cannot have the camera
     while our app holds it, so the A/B has to hand it over."""
     bundle = cfg().get("bundle_id")
     device = device_id()
@@ -309,7 +309,7 @@ def app(action):
         return r.returncode == 0
     pids = [l.split()[0] for l in sh("xcrun", "devicectl", "device", "info", "processes",
                                      "--device", device).stdout.splitlines()
-            if "/GoblinCam.app/" in l]
+            if "/FormwrkCam.app/" in l]
     for pid in pids:
         sh("xcrun", "devicectl", "device", "process", "terminate", "--device", device, "--pid", pid)
     return True
@@ -332,7 +332,7 @@ def look(line):
     host, _ = endpoint(quiet=True)
     reply = control(line, host)
     if reply.startswith("error"):
-        sys.exit(f"phone said: {reply}\nIs GoblinCam open?")
+        sys.exit(f"phone said: {reply}\nIs FORMWRK Cam open?")
     print(f"camera    {reply}")
     print(f"          {control('state', host)}")
 
@@ -349,7 +349,7 @@ def rotate(which):
     was_shown = hide_source(ws) if ws else False
     reply = control(f"rotate {ANGLES[which]}", host)
     if reply.startswith("error"):
-        sys.exit(f"phone said: {reply}\nIs GoblinCam open?")
+        sys.exit(f"phone said: {reply}\nIs FORMWRK Cam open?")
     print(f"camera    {which} ({ANGLES[which]} deg)")
     print("          turn the phone in its mount to match -- a sensor cannot be rotated in software")
     if was_shown:
@@ -380,10 +380,10 @@ def preset(name):
     print(f"camera    {state}")
     device = state.split("| device", 1)[1] if "| device" in state else ""
     if not device:
-        sys.exit("check     this app build does not report the device -- run ./goblincam.py install")
+        sys.exit("check     this app build does not report the device -- run ./cam.py install")
     problems = []
     if "queue=stuck" in device:
-        problems.append("the camera queue is stuck, so nothing applies -- relaunch the app (./goblincam.py up after closing it)")
+        problems.append("the camera queue is stuck, so nothing applies -- relaunch the app (./cam.py up after closing it)")
     look_ = p["look"]
     if "iso" in look_:
         m = re.search(r"iso=(\d+)", device)
@@ -406,7 +406,7 @@ def probe(host):
             s.settimeout(5)
             head = s.recv(376)
     except OSError as e:
-        print(f"stream    nothing on {host}:{PORT} ({e.strerror or e}) -- is GoblinCam open?")
+        print(f"stream    nothing on {host}:{PORT} ({e.strerror or e}) -- is FORMWRK Cam open?")
         return False
     if not head or head[0] != 0x47:
         print("stream    connected but that is not MPEG-TS")
@@ -439,7 +439,7 @@ def up():
     state = control("state", host)
     if state.startswith("error") and transport == "usb":
         if app("launch"):
-            print("camera    launching GoblinCam on the phone")
+            print("camera    launching FORMWRK Cam on the phone")
             for _ in range(20):
                 time.sleep(0.5)
                 state = control("state", host)
@@ -447,7 +447,7 @@ def up():
                     break
     print(f"camera    {state}")
     if state.startswith("error"):
-        print("          unlock the phone and open GoblinCam, then run this again")
+        print("          unlock the phone and open FORMWRK Cam, then run this again")
         return
     probe(host)
 
@@ -534,7 +534,7 @@ def set_shown(ws, scene, item, shown):
 
 
 def hide_source(ws):
-    """Hide the GoblinCam item in the current scene. True if it was showing."""
+    """Hide the FORMWRK Cam item in the current scene. True if it was showing."""
     scene = call(ws, "GetCurrentProgramScene")["sceneName"]
     item = scene_item(ws, scene, SOURCE)
     if item is None:
@@ -597,7 +597,7 @@ def obs(mode):
                 cont = call(ws, "CreateInput", {"sceneName": scene, "inputName": CONTINUITY,
                                                 "inputKind": "macos-avcapture",
                                                 "inputSettings": settings})["sceneItemId"]
-            if item:  # sit exactly where GoblinCam sits, so only the camera changes
+            if item:  # sit exactly where FORMWRK Cam sits, so only the camera changes
                 t = call(ws, "GetSceneItemTransform",
                          {"sceneName": scene, "sceneItemId": item})["sceneItemTransform"]
                 for k in ("sourceWidth", "sourceHeight", "width", "height"):
@@ -611,10 +611,10 @@ def obs(mode):
             set_shown(ws, scene, item, False)
         set_shown(ws, scene, cont, True)
         print(f"obs       {scene}: showing {CONTINUITY} (1080p landscape, cropped by the scene)")
-        print("          ./goblincam.py obs on  to go back")
+        print("          ./cam.py obs on  to go back")
         return
 
-    # Going back to GoblinCam: Continuity must release the camera, so the app
+    # Going back to FORMWRK Cam: Continuity must release the camera, so the app
     # is relaunched. That resets the phone to landscape and auto focus.
     cont = scene_item(ws, scene, CONTINUITY)
     if cont and mode == "on":
